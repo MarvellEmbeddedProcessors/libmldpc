@@ -1,0 +1,46 @@
+---------------------------
+STEPS to generate library
+---------------------------
+Step 1: This file has dependecy on jansson library. Below are steps to  install jansson:
+	git clone https://github.com/akheron/jansson.git
+	cd jansson
+	mkdir build && cd build
+	cmake \
+		-DCMAKE_SYSTEM_NAME=Linux \
+		-DJANSSON_BUILD_SHARED_LIBS=1 \
+		-DCMAKE_C_COMPILER=/usr/bin/aarch64-linux-gnu-gcc \
+		-DCMAKE_INSTALL_PREFIX=/path/to/install \
+		..
+	make && make install
+
+Set the .pc file path from jansson install directory and dpdk install to PKG_CONFIGPATH path.
+For eg-
+export PKG_CONFIGPATH=/path/to/dpdk/build/prefix/lib/pkgconfig:/path/to/jansson/build/lib/pkgconfig
+
+# Set the toolchain path
+export PATH=$PATH:/opt/marvell-tools-1026.0/bin
+
+cd tvm_dpdk_mldev/
+meson build
+ninja -C build/ --cross-file=./config/arm64_cn10k_linux_gcc  # Library will be generated under src/libtvm_dpdk_mldev.so
+
+# Command to run test application
+./test/test-vdml config.json -- -m model.bin -i input.bin -o o.bin
+
+# Using config.json
+```
+   Use of config.json is to pass the dpdk eal device options.
+   The default syntax is present to pass the pci device as an option. But,
+   we can modify this file to pass virtual device as an argument.
+```
+  Example:
+	{
+	  "dev_type": "vdev",
+	  "device_id" : "ml_mvtvm",
+	  "attributes" : [
+		# pass device specific attribute, if any
+	  ],
+	  "log_level": [
+	          "--log-level=lib.eal,1"
+	  ]
+	}

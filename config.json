@@ -1,0 +1,10 @@
+{
+  "dev_type": "pci",
+  "device_id" : "0000:00:10.0",
+  "attributes" : [
+	  "fw_path=/path/to/mlip-fw.bin"
+  ],
+  "log_level": [
+	  "--log-level=lib.eal,1"
+  ]
+}
