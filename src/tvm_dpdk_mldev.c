@@ -207,28 +207,25 @@ parse_json(int argc, char *argv[])
 
 	j_obj = json_object_get(parsed_json, "dev_type");
 	if (strcmp(json_string_value(j_obj), "pci") == 0) {
-		strcpy(c_args[arg_count], " -a ");
+		strcpy(c_args[arg_count], "-a");
 		arg_count++;
 	} else if (strcmp(json_string_value(j_obj), "vdev") == 0) {
-		strcpy(c_args[arg_count], " --vdev=");
-		arg_count++;
+		strcpy(c_args[arg_count], "--vdev=");
 	} else {
 		printf("Device recognition failed. Only PCI and vdev devices are supported\n");
 		return -1;
 	}
 
 	j_obj = json_object_get(parsed_json, "device_id");
-	strcpy(c_args[arg_count], json_string_value(j_obj));
-	arg_count++;
+	strcat(c_args[arg_count], json_string_value(j_obj));
 
 	j_obj = json_object_get(parsed_json, "attributes");
 	for (int iter = 0; iter < json_array_size(j_obj); iter++) {
-		strcat(c_args[--arg_count], ", ");
-		arg_count++;
+		strcat(c_args[arg_count], ",");
 		j_arr_data = json_array_get(j_obj, iter);
-		strcpy(c_args[arg_count], json_string_value(j_arr_data));
-		arg_count++;
+		strcat(c_args[arg_count], json_string_value(j_arr_data));
 	}
+	arg_count++;
 
 	j_obj = json_object_get(parsed_json, "log_level");
 	for (int iter = 0; iter < json_array_size(j_obj); iter++) {
@@ -242,7 +239,7 @@ parse_json(int argc, char *argv[])
 		arg_count++;
 	}
 	v_args = malloc(arg_count * sizeof(char *));
-	for (uint16_t k = 0; k < arg_count; k++)
+	for (uint16_t k = 0; k <= arg_count; k++)
 		v_args[k] = c_args[k];
 
 	return arg_count;

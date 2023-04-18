@@ -21,8 +21,8 @@ export PKG_CONFIGPATH=/path/to/dpdk/build/prefix/lib/pkgconfig:/path/to/jansson/
 export PATH=$PATH:/opt/marvell-tools-1026.0/bin
 
 cd tvm_dpdk_mldev/
-meson build
-ninja -C build/ --cross-file=./config/arm64_cn10k_linux_gcc  # Library will be generated under src/libtvm_dpdk_mldev.so
+meson build --cross-file=./config/arm64_cn10k_linux_gcc
+ninja -C build/ 	 # Library will be generated under src/libtvm_dpdk_mldev.so
 
 # Command to run test application
 ./test/test-vdml config.json -- -m model.bin -i input.bin -o o.bin
