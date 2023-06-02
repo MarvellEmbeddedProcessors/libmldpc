@@ -18,6 +18,8 @@
 #define MAX_ARGS	64
 #define MAX_ARGS_LEN	128
 
+#define RTE_LOGTYPE_MLDEV RTE_LOGTYPE_USER1
+
 #define MIN(x, y) ((x < y) ? x : y)
 
 /* ML model variables structure */

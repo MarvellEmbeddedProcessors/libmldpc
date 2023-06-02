@@ -3,4 +3,4 @@
 
 sources = ['tvm_dpdk_mldev.c']
 
-shared_lib = shared_library('tvm_dpdk_mldev', sources, include_directories: includes, dependencies : deps, c_args: cflags, link_args: ldflags)
+shared_lib = shared_library('tvm_dpdk_mldev', sources, include_directories: includes, dependencies : deps, c_args: cflags, link_args: ldflags, install: true)
