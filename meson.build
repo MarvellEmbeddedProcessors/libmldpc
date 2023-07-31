@@ -6,9 +6,12 @@ project('libtvm_dpdk_mldev', 'c',
 
 pkgconfig = find_program('pkg-config')
 cflags_cmd = run_command(pkgconfig, '--cflags', 'libdpdk', check: true)
-ldflags_cmd = run_command(pkgconfig, '--static', '--libs', 'libdpdk', check: true)
+ldflags_cmd = run_command(pkgconfig, '--static', '--libs', 'libdpdk', 'libarchive', check: true)
 
 deps = dependency('jansson')
+deps1 = dependency('libarchive')
+deps2 = dependency('libpcap')
+deps3 = dependency('libcrypto')
 
 cflags = cflags_cmd.stdout().split()
 ldflags = ldflags_cmd.stdout().split()

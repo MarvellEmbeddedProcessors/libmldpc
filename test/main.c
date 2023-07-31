@@ -158,9 +158,6 @@ main(int argc, char *argv[])
 		return 0;
 
 	run_arg.num_batches = 1;
-	run_arg.mdl_type = 1; /* 1 - MRVL model
-				   0 - TVM model */
-	run_arg.repetitions = 1;
 
 	/* Read the model binary and fill the size in above apis */
 	fp = fopen(mdl_file.model_file, "rb");
@@ -178,7 +175,7 @@ main(int argc, char *argv[])
 	fread(model_addr, 1, model_size, fp);
 	fclose(fp);
 
-	run_arg.model_id = mrvl_ml_model_load(model_addr, model_size, run_arg.num_batches);
+	run_arg.model_id = mrvl_ml_model_load(model_addr, model_size);
 	printf("Model id is %d\n", run_arg.model_id);
 
 	fp = fopen(mdl_file.input_file, "rb");
@@ -187,7 +184,7 @@ main(int argc, char *argv[])
 	fseek(fp, 0, SEEK_SET);
 
 	/* allocate size for dequantize input */
-	run_arg.input_buf = mrvl_ml_io_alloc(run_arg.model_id, 1, run_arg.num_batches, &size);
+	run_arg.input_buf = mrvl_ml_io_alloc(run_arg.model_id, 1, &size);
 	if (run_arg.input_buf == NULL) {
 		printf("Failed to allocate input buffer\n");
 		return -1;
@@ -199,7 +196,7 @@ main(int argc, char *argv[])
 	fclose(fp);
 
 	/* Allocate o/p size */
-	run_arg.out_buf = mrvl_ml_io_alloc(run_arg.model_id, 3, run_arg.num_batches, &size);
+	run_arg.out_buf = mrvl_ml_io_alloc(run_arg.model_id, 3, &size);
 	if (run_arg.out_buf == NULL) {
 		printf("Failed to allocate output buffer\n");
 		return -1;
