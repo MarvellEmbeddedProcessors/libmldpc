@@ -18,6 +18,9 @@
 #define MAX_ARGS	64
 #define MAX_ARGS_LEN	128
 
+/* Maximum number of layers per model */
+#define ML_MAX_LAYERS 32
+
 #define RTE_LOGTYPE_MLDEV RTE_LOGTYPE_USER1
 
 #define MIN(x, y) ((x < y) ? x : y)
@@ -34,18 +37,19 @@ typedef struct {
 	struct rte_ml_op *op;
 
 	uint16_t min_align_size;
-	uint16_t model_id;
+	uint8_t dev_id;
+	uint8_t qp_id;
+} ml_common_t;
+typedef struct {
 	uint64_t isize_q;
 	uint64_t osize_q;
-	uint8_t dev_id;
 	uint64_t isize;
 	uint64_t osize;
-	uint8_t qp_id;
-
-} ml_model_vars_t;
+} ml_model_t;
 
 /* ML global variables */
-static ml_model_vars_t ml_models;
+static ml_common_t ml_common;
+static ml_model_t ml_model[ML_MAX_LAYERS];
 
 static void
 extbuf_free_callback(void *addr __rte_unused, void *opaque __rte_unused)
@@ -61,67 +65,67 @@ mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
 	int ret = 0;
 
 	/* get model info */
-	ret = rte_ml_model_info_get(ml_models.dev_id, model_id, &info);
+	ret = rte_ml_model_info_get(ml_common.dev_id, model_id, &info);
 	if (ret != 0) {
 		printf("Failed to get model info :\n");
 		return NULL;
 	}
 
-	ml_models.isize = info.input_info->nb_elements * sizeof(float);
-	ml_models.isize_q = info.input_info->size;
-	ml_models.osize = info.output_info->nb_elements * sizeof(float);
-	ml_models.osize_q = info.output_info->size;
+	ml_model[model_id].isize = info.input_info->nb_elements * sizeof(float);
+	ml_model[model_id].isize_q = info.input_info->size;
+	ml_model[model_id].osize = info.output_info->nb_elements * sizeof(float);
+	ml_model[model_id].osize_q = info.output_info->size;
 
 	switch (buff_type) {
 	case 0:
 		snprintf(str, PATH_MAX, "model_q_input_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, ml_models.isize_q, rte_socket_id(), 0,
-						 ml_models.min_align_size);
+		mz = rte_memzone_reserve_aligned(str, ml_model[model_id].isize_q, rte_socket_id(),
+						 0, ml_common.min_align_size);
 		if (mz == NULL) {
 			RTE_LOG(ERR, MLDEV, "Failed to create memzone for model quantize input:\n");
 			return NULL;
 		}
 		if (size != NULL)
-			*size = ml_models.isize_q;
+			*size = ml_model[model_id].isize_q;
 		return mz->addr;
 
 	case 1:
 		snprintf(str, PATH_MAX, "model_d_input_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, ml_models.isize, rte_socket_id(), 0,
-						 ml_models.min_align_size);
+		mz = rte_memzone_reserve_aligned(str, ml_model[model_id].isize, rte_socket_id(), 0,
+						 ml_common.min_align_size);
 		if (mz == NULL) {
 			RTE_LOG(ERR, MLDEV,
 				"Failed to create memzone for model dequantize input:\n");
 			return NULL;
 		}
 		if (size != NULL)
-			*size = ml_models.isize;
+			*size = ml_model[model_id].isize;
 		return mz->addr;
 
 	case 2:
 		snprintf(str, PATH_MAX, "model_q_output_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, ml_models.osize_q, rte_socket_id(), 0,
-						 ml_models.min_align_size);
+		mz = rte_memzone_reserve_aligned(str, ml_model[model_id].osize_q, rte_socket_id(),
+						 0, ml_common.min_align_size);
 		if (mz == NULL) {
 			RTE_LOG(ERR, MLDEV,
 				"Failed to create memzone for model quantize output:\n");
 			return NULL;
 		}
 		if (size != NULL)
-			*size = ml_models.osize_q;
+			*size = ml_model[model_id].osize_q;
 		return mz->addr;
 
 	case 3:
 		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, ml_models.osize, rte_socket_id(), 0,
-						 ml_models.min_align_size);
+		mz = rte_memzone_reserve_aligned(str, ml_model[model_id].osize, rte_socket_id(), 0,
+						 ml_common.min_align_size);
 		if (mz == NULL) {
 			RTE_LOG(ERR, MLDEV,
 				"Failed to create memzone for model dequantize output:\n");
 			return NULL;
 		}
 		if (size != NULL)
-			*size = ml_models.osize;
+			*size = ml_model[model_id].osize;
 		return mz->addr;
 	}
 
@@ -162,13 +166,13 @@ mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
 	shinfo.free_cb = extbuf_free_callback;
 	shinfo.fcb_opaque = NULL;
 
-	rte_pktmbuf_attach_extbuf(ml_models.i_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
-				  ml_models.isize, &shinfo);
-	rte_pktmbuf_attach_extbuf(ml_models.i_q_buf[0], qbuffer, rte_mem_virt2iova(qbuffer),
-				  ml_models.isize_q, &shinfo);
+	rte_pktmbuf_attach_extbuf(ml_common.i_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
+				  ml_model[model_id].isize, &shinfo);
+	rte_pktmbuf_attach_extbuf(ml_common.i_q_buf[0], qbuffer, rte_mem_virt2iova(qbuffer),
+				  ml_model[model_id].isize_q, &shinfo);
 
 	/* Quantize input */
-	ret = rte_ml_io_quantize(ml_models.dev_id, model_id, ml_models.i_d_buf, ml_models.i_q_buf);
+	ret = rte_ml_io_quantize(ml_common.dev_id, model_id, ml_common.i_d_buf, ml_common.i_q_buf);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Input Quantization failed,\n");
 		return ret;
@@ -185,10 +189,10 @@ mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
 	shinfo.free_cb = extbuf_free_callback;
 	shinfo.fcb_opaque = NULL;
 
-	rte_pktmbuf_attach_extbuf(ml_models.o_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
-				  ml_models.osize, &shinfo);
-	ret = rte_ml_io_dequantize(ml_models.dev_id, model_id, ml_models.o_q_buf,
-				   ml_models.o_d_buf);
+	rte_pktmbuf_attach_extbuf(ml_common.o_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
+				  ml_model[model_id].osize, &shinfo);
+	ret = rte_ml_io_dequantize(ml_common.dev_id, model_id, ml_common.o_q_buf,
+				   ml_common.o_d_buf);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Dequantization failed for output\n");
 		return ret;
@@ -309,91 +313,91 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	}
 
 	/* Get socket and device info */
-	ml_models.dev_id = dev_count - 1;
-	ret = rte_ml_dev_info_get(ml_models.dev_id, &dev_info);
+	ml_common.dev_id = dev_count - 1;
+	ret = rte_ml_dev_info_get(ml_common.dev_id, &dev_info);
 	if (ret != 0) {
-		fprintf(stderr, "Failed to get device info, ml_models.dev_id = %d\n",
-			ml_models.dev_id);
+		fprintf(stderr, "Failed to get device info, ml_common.dev_id = %d\n",
+			ml_common.dev_id);
 		return ret;
 	}
 
-	/* Configure ML devices, use only ml_models.dev_id = 0 */
-	ml_models.min_align_size = dev_info.align_size;
-	ml_config.socket_id = rte_ml_dev_socket_id(ml_models.dev_id);
+	/* Configure ML devices, use only ml_common.dev_id = 0 */
+	ml_common.min_align_size = dev_info.align_size;
+	ml_config.socket_id = rte_ml_dev_socket_id(ml_common.dev_id);
 	ml_config.nb_models = dev_info.max_models;
 	ml_config.nb_queue_pairs = MIN(dev_info.max_queue_pairs, num_threads);
-	ret = rte_ml_dev_configure(ml_models.dev_id, &ml_config);
+	ret = rte_ml_dev_configure(ml_common.dev_id, &ml_config);
 	if (ret != 0) {
-		fprintf(stderr, "Device configuration failed, ml_models.dev_id = %d\n",
-			ml_models.dev_id);
+		fprintf(stderr, "Device configuration failed, ml_common.dev_id = %d\n",
+			ml_common.dev_id);
 		return ret;
 	}
 
 	/* Create OP mempool */
-	ml_models.mp =
+	ml_common.mp =
 		rte_ml_op_pool_create("ml_op_pool", ML_OP_POOL_SIZE, 0, 0, ml_config.socket_id);
-	if (ml_models.mp == NULL) {
+	if (ml_common.mp == NULL) {
 		RTE_LOG(ERR, MLDEV, "Failed to create op pool : %s\n", "ml_op_pool");
 		return -1;
 	}
 
 	/* setup queue pairs */
-	ml_models.qp_conf.nb_desc = 1;
-	ml_models.qp_conf.cb = NULL;
-	for (ml_models.qp_id = 0; ml_models.qp_id < ml_config.nb_queue_pairs; ml_models.qp_id++) {
-		ret = rte_ml_dev_queue_pair_setup(ml_models.dev_id, ml_models.qp_id,
-						  &ml_models.qp_conf, ml_config.socket_id);
+	ml_common.qp_conf.nb_desc = 1;
+	ml_common.qp_conf.cb = NULL;
+	for (ml_common.qp_id = 0; ml_common.qp_id < ml_config.nb_queue_pairs; ml_common.qp_id++) {
+		ret = rte_ml_dev_queue_pair_setup(ml_common.dev_id, ml_common.qp_id,
+						  &ml_common.qp_conf, ml_config.socket_id);
 		if (ret != 0) {
 			RTE_LOG(ERR, MLDEV, "Device queue-pair setup failed, mldev_id = %d\n",
-				ml_models.dev_id);
+				ml_common.dev_id);
 			return ret;
 		}
 	}
 
 	/* Start device */
-	ret = rte_ml_dev_start(ml_models.dev_id);
+	ret = rte_ml_dev_start(ml_common.dev_id);
 	if (ret != 0) {
-		fprintf(stderr, "Device start failed, ml_models.dev_id = %d\n", ml_models.dev_id);
+		fprintf(stderr, "Device start failed, ml_common.dev_id = %d\n", ml_common.dev_id);
 		return ret;
 	};
 
 	/* create mbuf pool of with element of uint8_t. external buffers are attached to the mbuf
 	 * while queuing inference requests.
 	 */
-	ml_models.mbuf_pool =
+	ml_common.mbuf_pool =
 		rte_mempool_create("ml_mbuf_pool", ML_OP_POOL_SIZE, sizeof(uint8_t), 0, 0, NULL,
 				   NULL, NULL, NULL, ml_config.socket_id, 0);
-	if (ml_models.mbuf_pool == NULL) {
+	if (ml_common.mbuf_pool == NULL) {
 		printf("Failed to create mbuf pool : %s\n", "ml_test_mbuf_pool");
 		return -ENOMEM;
 	}
 
 next_model:
-	ret = rte_mempool_get(ml_models.mp, (void **)&ml_models.op);
+	ret = rte_mempool_get(ml_common.mp, (void **)&ml_common.op);
 	if (ret != 0)
 		goto next_model;
 
-	ret = rte_mempool_get_bulk(ml_models.mbuf_pool, (void **)ml_models.i_q_buf, 2);
+	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.i_q_buf, 2);
 	if (ret != 0) {
-		rte_mempool_put(ml_models.mp, ml_models.op);
+		rte_mempool_put(ml_common.mp, ml_common.op);
 		goto next_model;
 	}
 
-	ret = rte_mempool_get_bulk(ml_models.mbuf_pool, (void **)ml_models.i_d_buf, 2);
+	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.i_d_buf, 2);
 	if (ret != 0) {
-		rte_mempool_put(ml_models.mp, ml_models.op);
+		rte_mempool_put(ml_common.mp, ml_common.op);
 		goto next_model;
 	}
 
-	ret = rte_mempool_get_bulk(ml_models.mbuf_pool, (void **)ml_models.o_q_buf, 2);
+	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.o_q_buf, 2);
 	if (ret != 0) {
-		rte_mempool_put(ml_models.mp, ml_models.op);
+		rte_mempool_put(ml_common.mp, ml_common.op);
 		goto next_model;
 	}
 
-	ret = rte_mempool_get_bulk(ml_models.mbuf_pool, (void **)ml_models.o_d_buf, 2);
+	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.o_d_buf, 2);
 	if (ret != 0) {
-		rte_mempool_put(ml_models.mp, ml_models.op);
+		rte_mempool_put(ml_common.mp, ml_common.op);
 		goto next_model;
 	}
 
@@ -410,7 +414,7 @@ mrvl_ml_model_load(char *model_buffer, int model_size)
 	int ret = 0;
 
 	mz = rte_memzone_reserve_aligned("model", model_size, rte_socket_id(), 0,
-					 ml_models.min_align_size);
+					 ml_common.min_align_size);
 	if (mz == NULL) {
 		fprintf(stderr, "Failed to create model memzone: \n");
 		return -1;
@@ -422,21 +426,20 @@ mrvl_ml_model_load(char *model_buffer, int model_size)
 	memcpy(params.addr, model_buffer, model_size);
 
 	/*load the model */
-	ret = rte_ml_model_load(ml_models.dev_id, &params, &model_id);
+	ret = rte_ml_model_load(ml_common.dev_id, &params, &model_id);
 	if (ret != 0) {
 		fprintf(stderr, "Error loading model\n");
 		return ret;
 	}
 
 	/* Start model */
-	ret = rte_ml_model_start(ml_models.dev_id, model_id);
+	ret = rte_ml_model_start(ml_common.dev_id, model_id);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Model start failed, model_id = %d\n", model_id);
 		printf("return val is %d\n", ret);
 		return ret;
 	}
 
-	ml_models.model_id = model_id;
 	rte_memzone_free(mz);
 
 	return model_id;
@@ -464,7 +467,7 @@ ml_inference_get_stats(int model_id)
 	const struct rte_memzone *mz;
 	uint64_t total_avg_time = 0;
 
-	t->xstats_size = rte_ml_dev_xstats_names_get(ml_models.dev_id, RTE_ML_DEV_XSTATS_MODEL,
+	t->xstats_size = rte_ml_dev_xstats_names_get(ml_common.dev_id, RTE_ML_DEV_XSTATS_MODEL,
 						     model_id, NULL, 0);
 	if (t->xstats_size >= 0) {
 		/* allocate for xstats_map and values */
@@ -483,18 +486,16 @@ ml_inference_get_stats(int model_id)
 			ret = -ENOMEM;
 			goto error;
 		}
-		ret = rte_ml_dev_xstats_names_get(ml_models.dev_id, RTE_ML_DEV_XSTATS_MODEL,
-						  model_id, t->xstats_map,
-						  t->xstats_size);
+		ret = rte_ml_dev_xstats_names_get(ml_common.dev_id, RTE_ML_DEV_XSTATS_MODEL,
+						  model_id, t->xstats_map, t->xstats_size);
 		if (ret != t->xstats_size) {
 			printf("Unable to get xstats names, ret = %d\n", ret);
 			ret = -1;
 			goto error;
 		}
 		for (i = 0; i < t->xstats_size; i++)
-			rte_ml_dev_xstats_get(ml_models.dev_id, RTE_ML_DEV_XSTATS_MODEL,
-					      model_id, &t->xstats_map[i].id,
-					      &t->xstats_values[i], 1);
+			rte_ml_dev_xstats_get(ml_common.dev_id, RTE_ML_DEV_XSTATS_MODEL, model_id,
+					      &t->xstats_map[i].id, &t->xstats_values[i], 1);
 	}
 	if (j == 0) {
 		printf("\n");
@@ -513,6 +514,7 @@ ml_inference_get_stats(int model_id)
 		j++;
 	}
 
+	ret = 0;
 error:
 	/* release buffers */
 	mz = rte_memzone_lookup("ml_xstats_map");
@@ -537,13 +539,13 @@ mrvl_ml_model_unload(int model_id)
 	}
 
 	/* Stop model */
-	ret = rte_ml_model_stop(ml_models.dev_id, model_id);
+	ret = rte_ml_model_stop(ml_common.dev_id, model_id);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Model stop failed, mldev_id = %d\n", model_id);
 		return ret;
 	}
 
-	ret = rte_ml_model_unload(ml_models.dev_id, model_id);
+	ret = rte_ml_model_unload(ml_common.dev_id, model_id);
 	if (ret != 0) {
 		fprintf(stderr, "Error loading model : \n");
 		return ret;
@@ -568,7 +570,7 @@ int
 mrvl_ml_model_run_mt(struct run_args *run_arg, int thread_id)
 {
 
-	struct rte_ml_op *op = ml_models.op;
+	struct rte_ml_op *op = ml_common.op;
 	uint32_t burst_enq = 1;
 	uint32_t total_enq = 0;
 	uint32_t burst_deq;
@@ -584,16 +586,16 @@ enqueue_req:
 		/* Update ML Op */
 		op->model_id = run_arg->model_id;
 		op->nb_batches = run_arg->num_batches;
-		op->mempool = ml_models.mp;
+		op->mempool = ml_common.mp;
 
-		op->input = ml_models.i_q_buf;
-		op->output = ml_models.o_q_buf;
+		op->input = ml_common.i_q_buf;
+		op->output = ml_common.o_q_buf;
 
 		rte_pktmbuf_attach_extbuf(op->output[0], run_arg->out_buf,
-					  rte_mem_virt2iova(run_arg->out_buf), ml_models.osize,
-					  &shinfo);
+					  rte_mem_virt2iova(run_arg->out_buf),
+					  ml_model[run_arg->model_id].osize, &shinfo);
 	}
-	burst_enq = rte_ml_enqueue_burst(ml_models.dev_id, thread_id, &op, 1);
+	burst_enq = rte_ml_enqueue_burst(ml_common.dev_id, thread_id, &op, 1);
 	if (burst_enq == 0)
 		goto enqueue_req;
 
@@ -601,25 +603,25 @@ enqueue_req:
 		total_enq += burst_enq;
 
 		if (unlikely(op->status == RTE_ML_OP_STATUS_ERROR)) {
-			rte_ml_op_error_get(ml_models.dev_id, op, &error);
+			rte_ml_op_error_get(ml_common.dev_id, op, &error);
 			RTE_LOG(ERR, MLDEV, "error_code = 0x%016lx, error_message = %s\n",
 				error.errcode, error.message);
-			rte_mempool_put(ml_models.mp, op);
+			rte_mempool_put(ml_common.mp, op);
 			return error.errcode;
 		}
 	}
 
 dequeue_req:
 	/* dequeue burst */
-	burst_deq = rte_ml_dequeue_burst(ml_models.dev_id, thread_id, &op, 1);
+	burst_deq = rte_ml_dequeue_burst(ml_common.dev_id, thread_id, &op, 1);
 	if (likely(burst_deq == 1)) {
 		total_deq += burst_deq;
 
 		if (unlikely(op->status == RTE_ML_OP_STATUS_ERROR)) {
-			rte_ml_op_error_get(ml_models.dev_id, op, &error);
+			rte_ml_op_error_get(ml_common.dev_id, op, &error);
 			RTE_LOG(ERR, MLDEV, "error_code = 0x%016lx, error_message = %s\n",
 				error.errcode, error.message);
-			rte_mempool_put(ml_models.mp, op);
+			rte_mempool_put(ml_common.mp, op);
 			return error.errcode;
 		}
 	} else if (burst_deq == 0)
@@ -635,27 +637,27 @@ mrvl_ml_model_finish()
 	int ret = 0;
 
 	/* Free the mempool */
-	rte_mempool_put(ml_models.mp, ml_models.op);
+	rte_mempool_put(ml_common.mp, ml_common.op);
 
-	rte_mempool_put_bulk(ml_models.mbuf_pool, (void **)ml_models.i_q_buf, 2);
-	rte_mempool_put_bulk(ml_models.mbuf_pool, (void **)ml_models.i_d_buf, 2);
-	rte_mempool_put_bulk(ml_models.mbuf_pool, (void **)ml_models.o_q_buf, 2);
-	rte_mempool_put_bulk(ml_models.mbuf_pool, (void **)ml_models.o_d_buf, 2);
+	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.i_q_buf, 2);
+	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.i_d_buf, 2);
+	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.o_q_buf, 2);
+	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.o_d_buf, 2);
 
 	/* Stop device */
-	ret = rte_ml_dev_stop(ml_models.dev_id);
+	ret = rte_ml_dev_stop(ml_common.dev_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device stop failed, mldev_id = %d\n", ml_models.dev_id);
+		RTE_LOG(ERR, MLDEV, "Device stop failed, mldev_id = %d\n", ml_common.dev_id);
 		return ret;
 	}
 
 	/* Destroy op pool */
-	rte_ml_op_pool_free(ml_models.mp);
+	rte_ml_op_pool_free(ml_common.mp);
 
 	/* Close ML device */
-	ret = rte_ml_dev_close(ml_models.dev_id);
+	ret = rte_ml_dev_close(ml_common.dev_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device close failed, mldev_id = %d\n", ml_models.dev_id);
+		RTE_LOG(ERR, MLDEV, "Device close failed, mldev_id = %d\n", ml_common.dev_id);
 		return ret;
 	}
 
