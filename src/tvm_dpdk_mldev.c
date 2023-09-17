@@ -28,11 +28,12 @@
 /* ML model variables structure */
 typedef struct {
 	struct rte_ml_dev_qp_conf qp_conf;
-	struct rte_mbuf *i_q_buf[32];
-	struct rte_mbuf *i_d_buf[32];
-	struct rte_mbuf *o_q_buf[32];
-	struct rte_mbuf *o_d_buf[32];
-	struct rte_mempool *mbuf_pool;
+	struct rte_ml_buff_seg *i_q_segs[32];
+	struct rte_ml_buff_seg *i_d_segs[32];
+	struct rte_ml_buff_seg *o_q_segs[32];
+	struct rte_ml_buff_seg *o_d_segs[32];
+	struct rte_ml_buff_seg d_buf[4];
+	struct rte_ml_buff_seg q_buf[4];
 	struct rte_mempool *mp;
 	struct rte_ml_op *op;
 
@@ -50,11 +51,6 @@ typedef struct {
 /* ML global variables */
 static ml_common_t ml_common;
 static ml_model_t ml_model[ML_MAX_LAYERS];
-
-static void
-extbuf_free_callback(void *addr __rte_unused, void *opaque __rte_unused)
-{
-}
 
 void *
 mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
@@ -160,19 +156,23 @@ mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
 int
 mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
 {
-	struct rte_mbuf_ext_shared_info shinfo;
 	int ret;
 
-	shinfo.free_cb = extbuf_free_callback;
-	shinfo.fcb_opaque = NULL;
+	ml_common.d_buf[0].addr = dbuffer;
+	ml_common.d_buf[0].iova_addr = rte_mem_virt2iova(dbuffer);
+	ml_common.d_buf[0].length = ml_model[model_id].isize;
+	ml_common.d_buf[0].next = NULL;
+	ml_common.i_d_segs[0] = &ml_common.d_buf[0];
 
-	rte_pktmbuf_attach_extbuf(ml_common.i_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
-				  ml_model[model_id].isize, &shinfo);
-	rte_pktmbuf_attach_extbuf(ml_common.i_q_buf[0], qbuffer, rte_mem_virt2iova(qbuffer),
-				  ml_model[model_id].isize_q, &shinfo);
+	ml_common.q_buf[0].addr = qbuffer;
+	ml_common.q_buf[0].iova_addr = rte_mem_virt2iova(qbuffer);
+	ml_common.q_buf[0].length = ml_model[model_id].isize_q;
+	ml_common.q_buf[0].next = NULL;
+	ml_common.i_q_segs[0] = &ml_common.q_buf[0];
 
 	/* Quantize input */
-	ret = rte_ml_io_quantize(ml_common.dev_id, model_id, ml_common.i_d_buf, ml_common.i_q_buf);
+	ret = rte_ml_io_quantize(ml_common.dev_id, model_id, ml_common.i_d_segs,
+				 ml_common.i_q_segs);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Input Quantization failed,\n");
 		return ret;
@@ -183,16 +183,16 @@ mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
 int
 mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
 {
-	struct rte_mbuf_ext_shared_info shinfo;
 	int ret;
 
-	shinfo.free_cb = extbuf_free_callback;
-	shinfo.fcb_opaque = NULL;
+	ml_common.d_buf[1].addr = dbuffer;
+	ml_common.d_buf[1].iova_addr = rte_mem_virt2iova(dbuffer);
+	ml_common.d_buf[1].length = ml_model[model_id].osize;
+	ml_common.d_buf[1].next = NULL;
+	ml_common.o_d_segs[0] = &ml_common.d_buf[1];
 
-	rte_pktmbuf_attach_extbuf(ml_common.o_d_buf[0], dbuffer, rte_mem_virt2iova(dbuffer),
-				  ml_model[model_id].osize, &shinfo);
-	ret = rte_ml_io_dequantize(ml_common.dev_id, model_id, ml_common.o_q_buf,
-				   ml_common.o_d_buf);
+	ret = rte_ml_io_dequantize(ml_common.dev_id, model_id, ml_common.o_q_segs,
+				   ml_common.o_d_segs);
 	if (ret != 0) {
 		RTE_LOG(ERR, MLDEV, "Dequantization failed for output\n");
 		return ret;
@@ -361,45 +361,10 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 		return ret;
 	};
 
-	/* create mbuf pool of with element of uint8_t. external buffers are attached to the mbuf
-	 * while queuing inference requests.
-	 */
-	ml_common.mbuf_pool =
-		rte_mempool_create("ml_mbuf_pool", ML_OP_POOL_SIZE, sizeof(uint8_t), 0, 0, NULL,
-				   NULL, NULL, NULL, ml_config.socket_id, 0);
-	if (ml_common.mbuf_pool == NULL) {
-		printf("Failed to create mbuf pool : %s\n", "ml_test_mbuf_pool");
-		return -ENOMEM;
-	}
-
 next_model:
 	ret = rte_mempool_get(ml_common.mp, (void **)&ml_common.op);
 	if (ret != 0)
 		goto next_model;
-
-	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.i_q_buf, 2);
-	if (ret != 0) {
-		rte_mempool_put(ml_common.mp, ml_common.op);
-		goto next_model;
-	}
-
-	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.i_d_buf, 2);
-	if (ret != 0) {
-		rte_mempool_put(ml_common.mp, ml_common.op);
-		goto next_model;
-	}
-
-	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.o_q_buf, 2);
-	if (ret != 0) {
-		rte_mempool_put(ml_common.mp, ml_common.op);
-		goto next_model;
-	}
-
-	ret = rte_mempool_get_bulk(ml_common.mbuf_pool, (void **)ml_common.o_d_buf, 2);
-	if (ret != 0) {
-		rte_mempool_put(ml_common.mp, ml_common.op);
-		goto next_model;
-	}
 
 	return ret;
 }
@@ -576,11 +541,12 @@ mrvl_ml_model_run_mt(struct run_args *run_arg, int thread_id)
 	uint32_t burst_deq;
 	uint32_t total_deq = 0;
 	struct rte_ml_op_error error;
-	struct rte_mbuf_ext_shared_info shinfo;
 
-	shinfo.free_cb = extbuf_free_callback;
-	shinfo.fcb_opaque = NULL;
-
+	ml_common.q_buf[1].addr = run_arg->out_buf;
+	ml_common.q_buf[1].iova_addr = rte_mem_virt2iova(run_arg->out_buf);
+	ml_common.q_buf[1].length = ml_model[run_arg->model_id].osize_q;
+	ml_common.q_buf[1].next = NULL;
+	ml_common.o_q_segs[0] = &ml_common.q_buf[1];
 enqueue_req:
 	if (burst_enq == 1) {
 		/* Update ML Op */
@@ -588,12 +554,8 @@ enqueue_req:
 		op->nb_batches = run_arg->num_batches;
 		op->mempool = ml_common.mp;
 
-		op->input = ml_common.i_q_buf;
-		op->output = ml_common.o_q_buf;
-
-		rte_pktmbuf_attach_extbuf(op->output[0], run_arg->out_buf,
-					  rte_mem_virt2iova(run_arg->out_buf),
-					  ml_model[run_arg->model_id].osize, &shinfo);
+		op->input = ml_common.i_q_segs;
+		op->output = ml_common.o_q_segs;
 	}
 	burst_enq = rte_ml_enqueue_burst(ml_common.dev_id, thread_id, &op, 1);
 	if (burst_enq == 0)
@@ -638,11 +600,6 @@ mrvl_ml_model_finish()
 
 	/* Free the mempool */
 	rte_mempool_put(ml_common.mp, ml_common.op);
-
-	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.i_q_buf, 2);
-	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.i_d_buf, 2);
-	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.o_q_buf, 2);
-	rte_mempool_put_bulk(ml_common.mbuf_pool, (void **)ml_common.o_d_buf, 2);
 
 	/* Stop device */
 	ret = rte_ml_dev_stop(ml_common.dev_id);
