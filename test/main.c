@@ -223,7 +223,7 @@ main(int argc, char *argv[])
 		return -1;
 	}
 
-	mrvl_ml_model_finish();
+	mrvl_ml_finish();
 
 	return 0;
 }
