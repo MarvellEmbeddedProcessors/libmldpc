@@ -65,54 +65,6 @@ int eal_argc;
 char eal_args[ML_MAX_EAL_ARGS][PATH_MAX];
 char **eal_argv;
 
-int
-mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
-{
-	int ret;
-
-	model_ctx[model_id].input_seg_d.addr = dbuffer;
-	model_ctx[model_id].input_seg_d.iova_addr = rte_mem_virt2iova(dbuffer);
-	model_ctx[model_id].input_seg_d.length = model_ctx[model_id].input_size_d;
-	model_ctx[model_id].input_seg_d.next = NULL;
-	model_ctx[model_id].input_seg_array_d = &model_ctx[model_id].input_seg_d;
-
-	model_ctx[model_id].input_seg_q.addr = qbuffer;
-	model_ctx[model_id].input_seg_q.iova_addr = rte_mem_virt2iova(qbuffer);
-	model_ctx[model_id].input_seg_q.length = model_ctx[model_id].input_size_q;
-	model_ctx[model_id].input_seg_q.next = NULL;
-	model_ctx[model_id].input_seg_array_q = &model_ctx[model_id].input_seg_q;
-
-	/* Quantize input */
-	ret = rte_ml_io_quantize(dev_ctx.dev_id, model_id, &model_ctx[model_id].input_seg_array_d,
-				 &model_ctx[model_id].input_seg_array_q);
-	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Input Quantization failed,\n");
-		return ret;
-	}
-	return ret;
-}
-
-int
-mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
-{
-	int ret;
-
-	model_ctx[model_id].output_seg_d.addr = dbuffer;
-	model_ctx[model_id].output_seg_d.iova_addr = rte_mem_virt2iova(dbuffer);
-	model_ctx[model_id].output_seg_d.length = model_ctx[model_id].output_size_d;
-	model_ctx[model_id].output_seg_d.next = NULL;
-	model_ctx[model_id].output_seg_array_d = &model_ctx[model_id].output_seg_d;
-
-	ret = rte_ml_io_dequantize(dev_ctx.dev_id, model_id,
-				   &model_ctx[model_id].output_seg_array_q,
-				   &model_ctx[model_id].output_seg_array_d);
-	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Dequantization failed for output\n");
-		return ret;
-	}
-	return ret;
-}
-
 static int
 parse_json(int argc, char *argv[], char *config_file)
 {
@@ -553,6 +505,50 @@ mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
 		if ((uint64_t)mz->addr == (uint64_t)addr)
 			rte_memzone_free(mz);
 	}
+}
+
+int
+mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
+{
+	int ret;
+
+	model_ctx[model_id].input_seg_d.addr = dbuffer;
+	model_ctx[model_id].input_seg_d.iova_addr = rte_mem_virt2iova(dbuffer);
+
+	model_ctx[model_id].input_seg_q.addr = qbuffer;
+	model_ctx[model_id].input_seg_q.iova_addr = rte_mem_virt2iova(qbuffer);
+
+	/* Quantize input */
+	ret = rte_ml_io_quantize(dev_ctx.dev_id, model_id, &model_ctx[model_id].input_seg_array_d,
+				 &model_ctx[model_id].input_seg_array_q);
+	if (ret != 0) {
+		RTE_LOG(ERR, MLDEV, "Input Quantization failed, model_id = %u\n", model_id);
+		return ret;
+	}
+
+	return 0;
+}
+
+int
+mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
+{
+	int ret;
+
+	model_ctx[model_id].output_seg_q.addr = qbuffer;
+	model_ctx[model_id].output_seg_q.iova_addr = rte_mem_virt2iova(qbuffer);
+
+	model_ctx[model_id].output_seg_d.addr = dbuffer;
+	model_ctx[model_id].output_seg_d.iova_addr = rte_mem_virt2iova(dbuffer);
+
+	ret = rte_ml_io_dequantize(dev_ctx.dev_id, model_id,
+				   &model_ctx[model_id].output_seg_array_q,
+				   &model_ctx[model_id].output_seg_array_d);
+	if (ret != 0) {
+		RTE_LOG(ERR, MLDEV, "Output Dequantization failed, model_id = %u\n", model_id);
+		return ret;
+	}
+
+	return 0;
 }
 
 int
