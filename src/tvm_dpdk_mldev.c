@@ -552,11 +552,11 @@ mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
 }
 
 int
-mrvl_ml_model_run(struct run_args *run_arg)
+mrvl_ml_model_run(int model_id, void *input_buffer, void *output_buffer, int num_batches)
 {
 	int ret = 0;
 
-	ret = mrvl_ml_model_run_mt(run_arg, 0);
+	ret = mrvl_ml_model_run_mt(model_id, input_buffer, output_buffer, num_batches, 0);
 	if (ret != 0) {
 		printf("mrvl_ml_model_run() Failed\n");
 		return -1;
@@ -565,70 +565,49 @@ mrvl_ml_model_run(struct run_args *run_arg)
 }
 
 int
-mrvl_ml_model_run_mt(struct run_args *run_arg, int thread_id)
+mrvl_ml_model_run_mt(int model_id, void *input_buffer, void *output_buffer, int num_batches,
+		     int thread_id)
 {
-
-	struct rte_ml_op *op;
-	uint32_t burst_enq = 1;
-	uint32_t total_enq = 0;
-	uint32_t burst_deq;
-	uint32_t total_deq = 0;
 	struct rte_ml_op_error error;
+	uint16_t enqueued = 0;
+	uint16_t dequeued = 0;
+	struct rte_ml_op *op;
+	int ret = 0;
 
-	model_ctx[run_arg->model_id].output_seg_q.addr = run_arg->out_buf;
-	model_ctx[run_arg->model_id].output_seg_q.iova_addr = rte_mem_virt2iova(run_arg->out_buf);
-	model_ctx[run_arg->model_id].output_seg_q.length =
-		model_ctx[run_arg->model_id].output_size_q;
-	model_ctx[run_arg->model_id].output_seg_q.next = NULL;
-	model_ctx[run_arg->model_id].output_seg_array_q =
-		&model_ctx[run_arg->model_id].output_seg_q;
+	model_ctx[model_id].input_seg_q.addr = input_buffer;
+	model_ctx[model_id].input_seg_q.iova_addr = rte_mem_virt2iova(input_buffer);
+
+	model_ctx[model_id].output_seg_q.addr = output_buffer;
+	model_ctx[model_id].output_seg_q.iova_addr = rte_mem_virt2iova(output_buffer);
 
 	if (rte_mempool_get(dev_ctx.op_pool, (void **)&op) != 0)
 		return -1;
 
-enqueue_req:
-	if (burst_enq == 1) {
-		/* Update ML Op */
-		op->model_id = run_arg->model_id;
-		op->nb_batches = run_arg->num_batches;
-		op->mempool = dev_ctx.op_pool;
+	op->model_id = model_id;
+	op->nb_batches = num_batches;
+	op->mempool = dev_ctx.op_pool;
+	op->input = &model_ctx[model_id].input_seg_array_q;
+	op->output = &model_ctx[model_id].output_seg_array_q;
 
-		op->input = &model_ctx[run_arg->model_id].input_seg_array_q;
-		op->output = &model_ctx[run_arg->model_id].output_seg_array_q;
-	}
-	burst_enq = rte_ml_enqueue_burst(dev_ctx.dev_id, thread_id, &op, 1);
-	if (burst_enq == 0)
+enqueue_req:
+	enqueued = rte_ml_enqueue_burst(dev_ctx.dev_id, thread_id, &op, 1);
+	if (unlikely(enqueued == 0))
 		goto enqueue_req;
 
-	if (likely(burst_enq == 1)) {
-		total_enq += burst_enq;
-
+dequeue_req:
+	dequeued = rte_ml_dequeue_burst(dev_ctx.dev_id, thread_id, &op, 1);
+	if (likely(dequeued == 1)) {
 		if (unlikely(op->status == RTE_ML_OP_STATUS_ERROR)) {
 			rte_ml_op_error_get(dev_ctx.dev_id, op, &error);
 			RTE_LOG(ERR, MLDEV, "error_code = 0x%016lx, error_message = %s\n",
 				error.errcode, error.message);
-			rte_mempool_put(dev_ctx.op_pool, op);
-			return error.errcode;
-		} else {
-			rte_mempool_put(dev_ctx.op_pool, op);
+			ret = -1;
 		}
+
+		rte_mempool_put(dev_ctx.op_pool, op);
+	} else {
+		goto dequeue_req;
 	}
 
-dequeue_req:
-	/* dequeue burst */
-	burst_deq = rte_ml_dequeue_burst(dev_ctx.dev_id, thread_id, &op, 1);
-	if (likely(burst_deq == 1)) {
-		total_deq += burst_deq;
-
-		if (unlikely(op->status == RTE_ML_OP_STATUS_ERROR)) {
-			rte_ml_op_error_get(dev_ctx.dev_id, op, &error);
-			RTE_LOG(ERR, MLDEV, "error_code = 0x%016lx, error_message = %s\n",
-				error.errcode, error.message);
-			rte_mempool_put(dev_ctx.op_pool, op);
-			return error.errcode;
-		}
-	} else if (burst_deq == 0)
-		goto dequeue_req;
-
-	return 0;
+	return ret;
 }

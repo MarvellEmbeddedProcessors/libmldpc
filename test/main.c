@@ -141,7 +141,11 @@ main(int argc, char *argv[])
 	char *model_addr;
 	FILE *fp;
 	uint64_t size = 0;
-	struct run_args run_arg;
+
+	int model_id;
+	void *input_buffer;
+	void *output_buffer;
+	int num_batches;
 
 	ret = mrvl_ml_init(argc, argv);
 	if (ret != 0) {
@@ -157,7 +161,7 @@ main(int argc, char *argv[])
 	else if (ret > 0)
 		return 0;
 
-	run_arg.num_batches = 1;
+	num_batches = 1;
 
 	/* Read the model binary and fill the size in above apis */
 	fp = fopen(mdl_file.model_file, "rb");
@@ -175,8 +179,8 @@ main(int argc, char *argv[])
 	fread(model_addr, 1, model_size, fp);
 	fclose(fp);
 
-	run_arg.model_id = mrvl_ml_model_load(model_addr, model_size);
-	printf("Model id is %d\n", run_arg.model_id);
+	model_id = mrvl_ml_model_load(model_addr, model_size);
+	printf("Model id is %d\n", model_id);
 
 	fp = fopen(mdl_file.input_file, "rb");
 	fseek(fp, 0, SEEK_END);
@@ -184,25 +188,25 @@ main(int argc, char *argv[])
 	fseek(fp, 0, SEEK_SET);
 
 	/* allocate size for dequantize input */
-	run_arg.input_buf = mrvl_ml_io_alloc(run_arg.model_id, 1, &size);
-	if (run_arg.input_buf == NULL) {
+	input_buffer = mrvl_ml_io_alloc(model_id, 1, &size);
+	if (input_buffer == NULL) {
 		printf("Failed to allocate input buffer\n");
 		return -1;
 	}
-	if (fread(run_arg.input_buf, 1, input_size, fp) != input_size) {
+	if (fread(input_buffer, 1, input_size, fp) != input_size) {
 		printf("fread failed, err=%s, ecode= %d\n", strerror(errno), errno);
 		return -1;
 	}
 	fclose(fp);
 
 	/* Allocate o/p size */
-	run_arg.out_buf = mrvl_ml_io_alloc(run_arg.model_id, 3, &size);
-	if (run_arg.out_buf == NULL) {
+	output_buffer = mrvl_ml_io_alloc(model_id, 3, &size);
+	if (output_buffer == NULL) {
 		printf("Failed to allocate output buffer\n");
 		return -1;
 	}
 
-	ret = mrvl_ml_model_run(&run_arg);
+	ret = mrvl_ml_model_run(model_id, input_buffer, output_buffer, num_batches);
 	if (ret != 0) {
 		printf("Failure inside mrvl_ml_model_run()\n");
 		return -1;
@@ -211,13 +215,13 @@ main(int argc, char *argv[])
 	/* dump output to a file */
 	fp = fopen(mdl_file.output_file, "wb");
 	fseek(fp, 0, SEEK_SET);
-	fwrite(run_arg.out_buf, size, 1, fp);
+	fwrite(output_buffer, size, 1, fp);
 	fclose(fp);
 
-	mrvl_ml_io_free(run_arg.model_id, 1, run_arg.input_buf);
-	mrvl_ml_io_free(run_arg.model_id, 3, run_arg.out_buf);
+	mrvl_ml_io_free(model_id, 1, input_buffer);
+	mrvl_ml_io_free(model_id, 3, output_buffer);
 
-	ret = mrvl_ml_model_unload(run_arg.model_id);
+	ret = mrvl_ml_model_unload(model_id);
 	if (ret != 0) {
 		printf("Failure inside mrvl_ml_model_unload()\n");
 		return -1;
