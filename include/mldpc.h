@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright (c) 2022 Marvell.
+ * Copyright (c) 2023 Marvell.
  */
 
-#ifndef __VELOX_MLINTF_H__
-#define __VELOX_MLINTF_H__
+#ifndef _MLDPC_H_
+#define _MLDPC_H_
 
 #include <stdint.h>
 #include <stdio.h>
@@ -33,4 +33,4 @@ int mrvl_ml_model_run(int model_id, void *input_buffer, void *output_buffer, int
 int mrvl_ml_model_run_mt(int model_id, void *input_buffer, void *output_buffer, int num_batches,
 			 int thread_id);
 
-#endif /* __VELOX_MLINTF_H__ */
+#endif /* _MLDPC_H_ */

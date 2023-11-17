@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause
- * Copyright (c) 2022 Marvell.
+ * Copyright (c) 2023 Marvell.
  */
 
 #include <errno.h>
@@ -17,7 +17,7 @@
 #include <rte_memzone.h>
 #include <rte_mldev.h>
 
-#include "tvm_dpdk_mldev.h"
+#include "mldpc.h"
 
 #define EAL_ARGS 2
 

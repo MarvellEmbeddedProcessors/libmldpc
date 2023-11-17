@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2022 Marvell.
+# Copyright (c) 2023 Marvell.
 
 sources = ['main.c']
 
-executable('test-vdml', sources, include_directories : includes, c_args: cflags, link_with: shared_lib)
+executable('test-mldpc', sources, include_directories : includes, dependencies : ext_deps, link_with: shared_lib)

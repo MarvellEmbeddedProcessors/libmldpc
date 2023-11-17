@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Marvell.
+
 ---
 BasedOnStyle: LLVM
 IndentWidth: 8
@@ -24,33 +27,4 @@ AlignTrailingComments : true
 BreakBeforeTernaryOperators : false
 SpacesInContainerLiterals : false
 ReflowComments: true
-ForEachMacros:
-  - 'CIRBUF_FOREACH'
-  - 'LIST_FOREACH'
-  - 'LIST_FOREACH_SAFE'
-  - 'RTE_BBDEV_FOREACH'
-  - 'RTE_DEV_FOREACH'
-  - 'RTE_EAL_DEVARGS_FOREACH'
-  - 'RTE_ETH_FOREACH_DEV'
-  - 'RTE_ETH_FOREACH_DEV_OF'
-  - 'RTE_ETH_FOREACH_DEV_OWNED_BY'
-  - 'RTE_ETH_FOREACH_DEV_SIBLING'
-  - 'RTE_ETH_FOREACH_MATCHING_DEV'
-  - 'RTE_ETH_FOREACH_VALID_DEV'
-  - 'rte_graph_foreach_node'
-  - 'RTE_LCORE_FOREACH'
-  - 'RTE_LCORE_FOREACH_SLAVE'
-  - 'STAILQ_FOREACH'
-  - 'TAILQ_FOREACH'
-  - 'TAILQ_FOREACH_FROM'
-  - 'TAILQ_FOREACH_FROM_SAFE'
-  - 'TAILQ_FOREACH_REVERSE'
-  - 'TAILQ_FOREACH_REVERSE_FROM'
-  - 'TAILQ_FOREACH_REVERSE_FROM_SAFE'
-  - 'TAILQ_FOREACH_REVERSE_SAFE'
-  - 'TAILQ_FOREACH_SAFE'
-  - 'FOREACH_DEVICE_ON_PCIBUS'
-  - 'FOREACH_DEVARGS_ON_PCIBUS'
-  - 'FOREACH_DRIVER_ON_PCIBUS'
-  - 'FOREACH_DEVICE_REVERSE_ON_PCIBUS_SAFE'
----
+IndentGotoLabels : false

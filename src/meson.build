@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2022 Marvell.
+# Copyright (c) 2023 Marvell.
 
-sources = ['tvm_dpdk_mldev.c']
+sources = ['mldpc.c']
 
-shared_lib = shared_library('tvm_dpdk_mldev', sources, include_directories: includes, dependencies : [deps, deps1, deps2, deps3], c_args: cflags, link_args: ldflags, install: true)
+shared_lib = shared_library('mldpc', sources, include_directories: includes, dependencies : ext_deps, install: true)

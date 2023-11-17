@@ -1,23 +1,25 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2022 Marvell.
+# Copyright (c) 2023 Marvell.
 
-project('libtvm_dpdk_mldev', 'c',
-  version : '0.1')
+project('libmldpc', 'c',
+  version : '1.0')
 
-pkgconfig = find_program('pkg-config')
-cflags_cmd = run_command(pkgconfig, '--cflags', 'libdpdk', check: true)
-ldflags_cmd = run_command(pkgconfig, '--static', '--libs', 'libdpdk', 'libarchive', check: true)
+ext_deps = []
 
-deps = dependency('jansson')
-deps1 = dependency('libarchive')
-deps2 = dependency('libpcap')
-deps3 = dependency('libcrypto')
+libdpdk_dep = dependency('libdpdk', method: 'pkg-config', required: true)
+if libdpdk_dep.found()
+  ext_deps += libdpdk_dep
+endif
 
-cflags = cflags_cmd.stdout().split()
-ldflags = ldflags_cmd.stdout().split()
+jansson_dep = dependency('jansson', method: 'pkg-config', required: true)
+if jansson_dep.found()
+  ext_deps += jansson_dep
+endif
 
 includes = include_directories('include', )
 
-subdir('src')
 subdir('include')
+subdir('src')
 subdir('test')
+
+install_data('config.json', install_dir: 'share/mldpc', install_mode: 'rw-r--r--')
