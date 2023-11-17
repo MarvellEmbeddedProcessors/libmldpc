@@ -65,107 +65,6 @@ int eal_argc;
 char eal_args[ML_MAX_EAL_ARGS][PATH_MAX];
 char **eal_argv;
 
-void *
-mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
-{
-	struct rte_ml_model_info info;
-	const struct rte_memzone *mz;
-	char str[PATH_MAX];
-	int ret = 0;
-
-	/* get model info */
-	ret = rte_ml_model_info_get(dev_ctx.dev_id, model_id, &info);
-	if (ret != 0) {
-		printf("Failed to get model info :\n");
-		return NULL;
-	}
-
-	model_ctx[model_id].input_size_d = info.input_info->nb_elements * sizeof(float);
-	model_ctx[model_id].input_size_q = info.input_info->size;
-	model_ctx[model_id].output_size_d = info.output_info->nb_elements * sizeof(float);
-	model_ctx[model_id].output_size_q = info.output_info->size;
-
-	switch (buff_type) {
-	case 0:
-		snprintf(str, PATH_MAX, "model_q_input_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, model_ctx[model_id].input_size_q,
-						 rte_socket_id(), 0, dev_ctx.dev_info.align_size);
-		if (mz == NULL) {
-			RTE_LOG(ERR, MLDEV, "Failed to create memzone for model quantize input:\n");
-			return NULL;
-		}
-		if (size != NULL)
-			*size = model_ctx[model_id].input_size_q;
-		return mz->addr;
-
-	case 1:
-		snprintf(str, PATH_MAX, "model_d_input_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, model_ctx[model_id].input_size_d,
-						 rte_socket_id(), 0, dev_ctx.dev_info.align_size);
-		if (mz == NULL) {
-			RTE_LOG(ERR, MLDEV,
-				"Failed to create memzone for model dequantize input:\n");
-			return NULL;
-		}
-		if (size != NULL)
-			*size = model_ctx[model_id].input_size_d;
-		return mz->addr;
-
-	case 2:
-		snprintf(str, PATH_MAX, "model_q_output_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, model_ctx[model_id].output_size_q,
-						 rte_socket_id(), 0, dev_ctx.dev_info.align_size);
-		if (mz == NULL) {
-			RTE_LOG(ERR, MLDEV,
-				"Failed to create memzone for model quantize output:\n");
-			return NULL;
-		}
-		if (size != NULL)
-			*size = model_ctx[model_id].output_size_q;
-		return mz->addr;
-
-	case 3:
-		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
-		mz = rte_memzone_reserve_aligned(str, model_ctx[model_id].output_size_d,
-						 rte_socket_id(), 0, dev_ctx.dev_info.align_size);
-		if (mz == NULL) {
-			RTE_LOG(ERR, MLDEV,
-				"Failed to create memzone for model dequantize output:\n");
-			return NULL;
-		}
-		if (size != NULL)
-			*size = model_ctx[model_id].output_size_d;
-		return mz->addr;
-	}
-
-	return NULL;
-}
-
-void
-mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
-{
-	const struct rte_memzone *mz = NULL;
-	char str[PATH_MAX];
-
-	if (buff_type == input_quantize) {
-		snprintf(str, PATH_MAX, "model_q_input_%d", model_id);
-		mz = rte_memzone_lookup(str);
-	} else if (buff_type == input_dequantize) {
-		snprintf(str, PATH_MAX, "model_d_input_%d", model_id);
-		mz = rte_memzone_lookup(str);
-	} else if (buff_type == output_quantize) {
-		snprintf(str, PATH_MAX, "model_q_output_%d", model_id);
-		mz = rte_memzone_lookup(str);
-	} else if (buff_type == output_dequantize) {
-		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
-		mz = rte_memzone_lookup(str);
-	}
-	if (mz != NULL) {
-		if ((uint64_t)mz->addr == (uint64_t)addr)
-			rte_memzone_free(mz);
-	}
-}
-
 int
 mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
 {
@@ -579,6 +478,81 @@ mrvl_ml_model_unload(int model_id)
 	}
 
 	return 0;
+}
+
+void *
+mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
+{
+	const struct rte_memzone *mz;
+	char str[PATH_MAX];
+	uint64_t lcl_size;
+
+	switch (buff_type) {
+	case input_quantize:
+		snprintf(str, PATH_MAX, "model_q_input_%d", model_id);
+		lcl_size = model_ctx[model_id].input_size_q;
+		break;
+	case input_dequantize:
+		snprintf(str, PATH_MAX, "model_d_input_%d", model_id);
+		lcl_size = model_ctx[model_id].input_size_d;
+		break;
+	case output_quantize:
+		snprintf(str, PATH_MAX, "model_q_output_%d", model_id);
+		lcl_size = model_ctx[model_id].output_size_q;
+		break;
+	case output_dequantize:
+		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
+		lcl_size = model_ctx[model_id].output_size_d;
+		break;
+	default:
+		RTE_LOG(ERR, MLDEV, "Invalid buffer_type = %d\n", buff_type);
+		return NULL;
+	}
+
+	mz = rte_memzone_reserve_aligned(str, lcl_size, dev_ctx.dev_config.socket_id, 0,
+					 dev_ctx.dev_info.align_size);
+	if (mz == NULL) {
+		RTE_LOG(ERR, MLDEV,
+			"Failed to create memzone for I/O data, dev_id = %d, model_id = %d, buffer_type = %d\n",
+			dev_ctx.dev_id, model_id, buff_type);
+		return NULL;
+	}
+
+	if (size != NULL)
+		*size = lcl_size;
+
+	return mz->addr;
+}
+
+void
+mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
+{
+	const struct rte_memzone *mz = NULL;
+	char str[PATH_MAX];
+
+	switch (buff_type) {
+	case input_quantize:
+		snprintf(str, PATH_MAX, "model_q_input_%d", model_id);
+		break;
+	case input_dequantize:
+		snprintf(str, PATH_MAX, "model_d_input_%d", model_id);
+		break;
+	case output_quantize:
+		snprintf(str, PATH_MAX, "model_q_output_%d", model_id);
+		break;
+	case output_dequantize:
+		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
+		break;
+	default:
+		RTE_LOG(ERR, MLDEV, "Invalid buffer_type = %d\n", buff_type);
+		return;
+	}
+
+	mz = rte_memzone_lookup(str);
+	if (mz != NULL) {
+		if ((uint64_t)mz->addr == (uint64_t)addr)
+			rte_memzone_free(mz);
+	}
 }
 
 int

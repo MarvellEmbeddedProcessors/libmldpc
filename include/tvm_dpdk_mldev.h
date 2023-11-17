@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+
 enum buffer_type { input_quantize = 0, input_dequantize, output_quantize, output_dequantize };
 
 struct run_args {
@@ -27,7 +28,9 @@ int mrvl_ml_model_load(char *model_buffer, int model_size);
 int mrvl_ml_model_unload(int model_id);
 
 void *mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size);
+
 void mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr);
+
 int mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer);
 int mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer);
 int mrvl_ml_model_run(struct run_args *run_arg);
