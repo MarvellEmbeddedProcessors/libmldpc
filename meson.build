@@ -6,10 +6,9 @@ project('libmldpc', 'c',
 
 ext_deps = []
 
-libdpdk_dep = dependency('libdpdk', method: 'pkg-config', required: true)
-if libdpdk_dep.found()
-  ext_deps += libdpdk_dep
-endif
+pkgconfig = find_program('pkg-config')
+cflags = run_command(pkgconfig, '--cflags', 'libdpdk', check: true).stdout().split()
+ldflags = run_command(pkgconfig, '--static', '--libs', 'libdpdk', check: true).stdout().split()
 
 jansson_dep = dependency('jansson', method: 'pkg-config', required: true)
 if jansson_dep.found()

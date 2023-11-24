@@ -75,6 +75,8 @@ parse_json(int argc, char *argv[], char *config_file)
 
 	int nb_args = 0;
 
+	(void)argc;
+
 	memset(eal_args, '\0', sizeof(eal_args));
 
 	json = json_load_file(config_file, 0, &json_error);
@@ -101,7 +103,7 @@ parse_json(int argc, char *argv[], char *config_file)
 	strcat(eal_args[nb_args], json_string_value(json_object));
 
 	json_object = json_object_get(json, "attributes");
-	for (int iter = 0; iter < json_array_size(json_object); iter++) {
+	for (uint64_t iter = 0; iter < json_array_size(json_object); iter++) {
 		strcat(eal_args[nb_args], ",");
 		json_array = json_array_get(json_object, iter);
 		strcat(eal_args[nb_args], json_string_value(json_array));
@@ -109,14 +111,9 @@ parse_json(int argc, char *argv[], char *config_file)
 	nb_args++;
 
 	json_object = json_object_get(json, "log_level");
-	for (int iter = 0; iter < json_array_size(json_object); iter++) {
+	for (uint64_t iter = 0; iter < json_array_size(json_object); iter++) {
 		json_array = json_array_get(json_object, iter);
 		strcpy(eal_args[nb_args], json_string_value(json_array));
-		nb_args++;
-	}
-
-	for (int i = 2; i < argc; i++) {
-		strcpy(eal_args[nb_args], argv[i]);
 		nb_args++;
 	}
 

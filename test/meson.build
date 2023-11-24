@@ -3,4 +3,4 @@
 
 sources = ['main.c']
 
-executable('test-mldpc', sources, include_directories : includes, dependencies : ext_deps, link_with: shared_lib)
+executable('test-mldpc', sources, include_directories : includes, dependencies : ext_deps, c_args: cflags, link_with: shared_lib)
