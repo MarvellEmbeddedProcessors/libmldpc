@@ -1,4 +1,5 @@
 {
+  "lcores": "4-23",
   "dev_type": "pci",
   "device_id": "0000:00:10.0",
   "attributes": [

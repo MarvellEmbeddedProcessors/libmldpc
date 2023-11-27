@@ -88,6 +88,11 @@ parse_json(int argc, char *argv[], char *config_file)
 	strcpy(eal_args[nb_args], argv[nb_args]);
 	nb_args++;
 
+	json_object = json_object_get(json, "lcores");
+	strcpy(eal_args[nb_args], "--lcores=");
+	strcat(eal_args[nb_args], json_string_value(json_object));
+	nb_args++;
+
 	json_object = json_object_get(json, "dev_type");
 	if (strcmp(json_string_value(json_object), "pci") == 0) {
 		strcpy(eal_args[nb_args], "-a");
