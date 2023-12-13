@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Marvell.
+
+PROJECT_NAME           = "@PROJECT_NAME@"
+
+PROJECT_NUMBER         = @LIBMLDPC_VERSION@
+
+STRIP_FROM_PATH        = @PROJECT_SOURCE_DIR@
+
+INPUT                  = @PROJECT_SOURCE_DIR@/docs/MainPage.md \
+                         @PROJECT_SOURCE_DIR@/docs/InstallPage.md \
+                         @PROJECT_SOURCE_DIR@/include
+
+FILE_PATTERNS          = *.hpp \
+                         *.cpp \
+                         *.h \
+                         *.c
+
+RECURSIVE              = YES
+
+EXTRACT_ALL            = YES
+
+BUILTIN_STL_SUPPORT    = YES
+
+USE_MDFILE_AS_MAINPAGE = @PROJECT_SOURCE_DIR@/docs/MainPage.md

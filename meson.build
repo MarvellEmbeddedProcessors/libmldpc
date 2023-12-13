@@ -21,4 +21,13 @@ subdir('include')
 subdir('src')
 subdir('test')
 
+if get_option('enable_docs')
+  doxygen = find_program('doxygen', required: false)
+  if doxygen.found()
+    subdir('docs')
+  else
+    message('Documentation disabled without doxygen')
+  endif
+endif
+
 install_data('config.json', install_dir: 'share/mldpc', install_mode: 'rw-r--r--')

@@ -435,7 +435,7 @@ mrvl_ml_model_unload(int model_id)
 }
 
 void *
-mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
+mrvl_ml_io_alloc(int model_id, enum mrvl_ml_buffer_type buff_type, uint64_t *size)
 {
 	const struct rte_memzone *mz;
 	char str[PATH_MAX];
@@ -459,7 +459,7 @@ mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
 		lcl_size = model_ctx[model_id].output_size_d;
 		break;
 	default:
-		RTE_LOG(ERR, MLDEV, "Invalid buffer_type = %d\n", buff_type);
+		RTE_LOG(ERR, MLDEV, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
 		return NULL;
 	}
 
@@ -467,7 +467,7 @@ mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
 					 dev_ctx.dev_info.align_size);
 	if (mz == NULL) {
 		RTE_LOG(ERR, MLDEV,
-			"Failed to create memzone for I/O data, dev_id = %d, model_id = %d, buffer_type = %d\n",
+			"Failed to create memzone for I/O data, dev_id = %d, model_id = %d, mrvl_ml_buffer_type = %d\n",
 			dev_ctx.dev_id, model_id, buff_type);
 		return NULL;
 	}
@@ -479,7 +479,7 @@ mrvl_ml_io_alloc(int model_id, enum buffer_type buff_type, uint64_t *size)
 }
 
 void
-mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
+mrvl_ml_io_free(int model_id, enum mrvl_ml_buffer_type buff_type, void *addr)
 {
 	const struct rte_memzone *mz = NULL;
 	char str[PATH_MAX];
@@ -498,7 +498,7 @@ mrvl_ml_io_free(int model_id, enum buffer_type buff_type, void *addr)
 		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
 		break;
 	default:
-		RTE_LOG(ERR, MLDEV, "Invalid buffer_type = %d\n", buff_type);
+		RTE_LOG(ERR, MLDEV, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
 		return;
 	}
 
