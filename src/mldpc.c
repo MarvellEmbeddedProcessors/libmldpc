@@ -24,7 +24,7 @@
 #define ML_MAX_MODELS	       64
 
 /* log stream */
-#define RTE_LOGTYPE_MLDEV RTE_LOGTYPE_USER1
+#define RTE_LOGTYPE_MLDPC RTE_LOGTYPE_USER1
 
 /* default EAL config */
 #define LIBMLDPC_CONFIG_DEFAULT_PATH "/usr/share/mldpc/config.json"
@@ -212,7 +212,7 @@ mrvl_ml_init(int argc, char *argv[])
 
 	ret = mrvl_ml_init_mt(argc, argv, ML_DEFAULT_NUM_THREADS);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "mrvl_ml_init ... failed\n");
+		RTE_LOG(ERR, MLDPC, "mrvl_ml_init ... failed\n");
 		return ret;
 	}
 
@@ -232,28 +232,28 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	config_file = getenv("LIBMLDPC_CONFIG_PATH");
 	if (!config_file)
 		config_file = LIBMLDPC_CONFIG_DEFAULT_PATH;
-	RTE_LOG(INFO, MLDEV, "LIBMLDPC_CONFIG_PATH = %s\n", config_file);
+	RTE_LOG(INFO, MLDPC, "LIBMLDPC_CONFIG_PATH = %s\n", config_file);
 
 	/* parse config file */
 	eal_argc = parse_json(argc, argv, config_file);
 	if (eal_argc < 0) {
-		RTE_LOG(ERR, MLDEV, "Failed pasing config file: %s\n", config_file);
+		RTE_LOG(ERR, MLDPC, "Failed pasing config file: %s\n", config_file);
 		return eal_argc;
 	}
 
 	for (i = 0; i < eal_argc; i++)
-		RTE_LOG(ERR, MLDEV, "eal_args[%d] = %s\n", i, eal_args[i]);
+		RTE_LOG(ERR, MLDPC, "eal_args[%d] = %s\n", i, eal_args[i]);
 
 	/* Init EAL */
 	ret = rte_eal_init(eal_argc, eal_argv);
 	if (ret < 0) {
-		RTE_LOG(ERR, MLDEV, "rte_eal_init .. failed\n");
+		RTE_LOG(ERR, MLDPC, "rte_eal_init .. failed\n");
 		return ret;
 	}
 
 	dev_count = rte_ml_dev_count();
 	if (dev_count <= 0) {
-		RTE_LOG(ERR, MLDEV, "No ML devices found. exit.\n");
+		RTE_LOG(ERR, MLDPC, "No ML devices found. exit.\n");
 		return dev_count;
 	}
 
@@ -261,7 +261,7 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	dev_ctx.dev_id = RTE_MAX(0, dev_count - 1);
 	ret = rte_ml_dev_info_get(dev_ctx.dev_id, &dev_ctx.dev_info);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Failed to get device info, dev_id = %d\n", dev_ctx.dev_id);
+		RTE_LOG(ERR, MLDPC, "Failed to get device info, dev_id = %d\n", dev_ctx.dev_id);
 		return ret;
 	}
 
@@ -271,7 +271,7 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	dev_ctx.dev_config.nb_queue_pairs = RTE_MIN(dev_ctx.dev_info.max_queue_pairs, num_threads);
 	ret = rte_ml_dev_configure(dev_ctx.dev_id, &dev_ctx.dev_config);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device configuration failed, dev_id = %d\n", dev_ctx.dev_id);
+		RTE_LOG(ERR, MLDPC, "Device configuration failed, dev_id = %d\n", dev_ctx.dev_id);
 		return ret;
 	}
 
@@ -279,7 +279,7 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	dev_ctx.op_pool = rte_ml_op_pool_create("ml_op_pool", ML_OP_POOL_SIZE, 0, 0,
 						dev_ctx.dev_config.socket_id);
 	if (dev_ctx.op_pool == NULL) {
-		RTE_LOG(ERR, MLDEV, "Failed to create op pool : %s\n", "ml_op_pool");
+		RTE_LOG(ERR, MLDPC, "Failed to create op pool : %s\n", "ml_op_pool");
 		return -rte_errno;
 	}
 
@@ -290,7 +290,7 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 		ret = rte_ml_dev_queue_pair_setup(dev_ctx.dev_id, qp_id, &qp_conf,
 						  dev_ctx.dev_config.socket_id);
 		if (ret != 0) {
-			RTE_LOG(ERR, MLDEV,
+			RTE_LOG(ERR, MLDPC,
 				"Device queue-pair setup failed, dev_id = %d, qp_id = %u\n",
 				dev_ctx.dev_id, qp_id);
 			return ret;
@@ -300,7 +300,7 @@ mrvl_ml_init_mt(int argc, char *argv[], int num_threads)
 	/* Start device */
 	ret = rte_ml_dev_start(dev_ctx.dev_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device start failed, dev_id = %d\n", dev_ctx.dev_id);
+		RTE_LOG(ERR, MLDPC, "Device start failed, dev_id = %d\n", dev_ctx.dev_id);
 		return ret;
 	};
 
@@ -315,7 +315,7 @@ mrvl_ml_finish(void)
 	/* Stop device */
 	ret = rte_ml_dev_stop(dev_ctx.dev_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device stop failed, mldev_id = %d\n", dev_ctx.dev_id);
+		RTE_LOG(ERR, MLDPC, "Device stop failed, mldev_id = %d\n", dev_ctx.dev_id);
 		return ret;
 	}
 
@@ -325,7 +325,7 @@ mrvl_ml_finish(void)
 	/* Close ML device */
 	ret = rte_ml_dev_close(dev_ctx.dev_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Device close failed, mldev_id = %d\n", dev_ctx.dev_id);
+		RTE_LOG(ERR, MLDPC, "Device close failed, mldev_id = %d\n", dev_ctx.dev_id);
 		return ret;
 	}
 
@@ -348,7 +348,7 @@ mrvl_ml_model_load(char *buffer, int size)
 	params.size = size;
 	ret = rte_ml_model_load(dev_ctx.dev_id, &params, &model_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Model load failed, dev_id = %d, buffer = %p\n", dev_ctx.dev_id,
+		RTE_LOG(ERR, MLDPC, "Model load failed, dev_id = %d, buffer = %p\n", dev_ctx.dev_id,
 			buffer);
 		return ret;
 	}
@@ -356,7 +356,7 @@ mrvl_ml_model_load(char *buffer, int size)
 	/* Start model */
 	ret = rte_ml_model_start(dev_ctx.dev_id, model_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Model start failed, dev_id = %d, model_id = %d\n",
+		RTE_LOG(ERR, MLDPC, "Model start failed, dev_id = %d, model_id = %d\n",
 			dev_ctx.dev_id, model_id);
 		return ret;
 	}
@@ -410,7 +410,7 @@ mrvl_ml_model_unload(int model_id)
 
 	ret = ml_inference_get_stats(model_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Error getting inference stats, dev_id = %d, model_id = %u\n",
+		RTE_LOG(ERR, MLDPC, "Error getting inference stats, dev_id = %d, model_id = %u\n",
 			dev_ctx.dev_id, model_id);
 		return ret;
 	}
@@ -418,7 +418,7 @@ mrvl_ml_model_unload(int model_id)
 	/* Stop model */
 	ret = rte_ml_model_stop(dev_ctx.dev_id, model_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Model stop failed, dev_id = %d, model_id = %u\n",
+		RTE_LOG(ERR, MLDPC, "Model stop failed, dev_id = %d, model_id = %u\n",
 			dev_ctx.dev_id, model_id);
 		return ret;
 	}
@@ -426,7 +426,7 @@ mrvl_ml_model_unload(int model_id)
 	/* Unload model */
 	ret = rte_ml_model_unload(dev_ctx.dev_id, model_id);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Model unload failed, dev_id = %d, model_id = %u\n",
+		RTE_LOG(ERR, MLDPC, "Model unload failed, dev_id = %d, model_id = %u\n",
 			dev_ctx.dev_id, model_id);
 		return ret;
 	}
@@ -459,14 +459,14 @@ mrvl_ml_io_alloc(int model_id, enum mrvl_ml_buffer_type buff_type, uint64_t *siz
 		lcl_size = model_ctx[model_id].output_size_d;
 		break;
 	default:
-		RTE_LOG(ERR, MLDEV, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
+		RTE_LOG(ERR, MLDPC, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
 		return NULL;
 	}
 
 	mz = rte_memzone_reserve_aligned(str, lcl_size, dev_ctx.dev_config.socket_id, 0,
 					 dev_ctx.dev_info.align_size);
 	if (mz == NULL) {
-		RTE_LOG(ERR, MLDEV,
+		RTE_LOG(ERR, MLDPC,
 			"Failed to create memzone for I/O data, dev_id = %d, model_id = %d, mrvl_ml_buffer_type = %d\n",
 			dev_ctx.dev_id, model_id, buff_type);
 		return NULL;
@@ -498,7 +498,7 @@ mrvl_ml_io_free(int model_id, enum mrvl_ml_buffer_type buff_type, void *addr)
 		snprintf(str, PATH_MAX, "model_d_output_%d", model_id);
 		break;
 	default:
-		RTE_LOG(ERR, MLDEV, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
+		RTE_LOG(ERR, MLDPC, "Invalid mrvl_ml_buffer_type = %d\n", buff_type);
 		return;
 	}
 
@@ -524,7 +524,7 @@ mrvl_ml_model_quantize(int model_id, void *dbuffer, void *qbuffer)
 	ret = rte_ml_io_quantize(dev_ctx.dev_id, model_id, &model_ctx[model_id].input_seg_array_d,
 				 &model_ctx[model_id].input_seg_array_q);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Input Quantization failed, model_id = %u\n", model_id);
+		RTE_LOG(ERR, MLDPC, "Input Quantization failed, model_id = %u\n", model_id);
 		return ret;
 	}
 
@@ -546,7 +546,7 @@ mrvl_ml_model_dequantize(int model_id, void *qbuffer, void *dbuffer)
 				   &model_ctx[model_id].output_seg_array_q,
 				   &model_ctx[model_id].output_seg_array_d);
 	if (ret != 0) {
-		RTE_LOG(ERR, MLDEV, "Output Dequantization failed, model_id = %u\n", model_id);
+		RTE_LOG(ERR, MLDPC, "Output Dequantization failed, model_id = %u\n", model_id);
 		return ret;
 	}
 
@@ -601,7 +601,7 @@ dequeue_req:
 	if (likely(dequeued == 1)) {
 		if (unlikely(op->status == RTE_ML_OP_STATUS_ERROR)) {
 			rte_ml_op_error_get(dev_ctx.dev_id, op, &error);
-			RTE_LOG(ERR, MLDEV, "error_code = 0x%016lx, error_message = %s\n",
+			RTE_LOG(ERR, MLDPC, "error_code = 0x%016lx, error_message = %s\n",
 				error.errcode, error.message);
 			ret = -1;
 		}
