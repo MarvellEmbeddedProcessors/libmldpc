@@ -27,7 +27,7 @@
 #define RTE_LOGTYPE_MLDEV RTE_LOGTYPE_USER1
 
 /* default EAL config */
-#define LIBMLDPC_CONFIG_DEFAULT_PATH "/usr/share/libmldpc/config.json"
+#define LIBMLDPC_CONFIG_DEFAULT_PATH "/usr/share/mldpc/config.json"
 
 /* device context */
 typedef struct ml_dev_ctx {
