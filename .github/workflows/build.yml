@@ -1,0 +1,153 @@
+name: build-libmldpc-cn10k
+
+on:
+  push:
+  schedule:
+    - cron: "0 0 * * 1"
+  pull_request:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  packages: write
+
+jobs:
+  ubuntu-cn10k-build:
+    name: ubuntu-cn10k-arm64
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: aarch64
+            distro: ubuntu22.04
+            compiler: gcc
+            library: static
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Generate cache keys
+        id: get_ref_keys
+        run: |
+          echo 'ccache=ccache-${{ matrix.distro }}-${{ matrix.compiler }}-${{ matrix.arch }}-'$(date -u +%Y-w%W) >> $GITHUB_OUTPUT
+      - name: Retrieve ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ steps.get_ref_keys.outputs.ccache }}-${{ github.ref }}
+          restore-keys: |
+            ${{ steps.get_ref_keys.outputs.ccache }}-refs/heads/main
+      - name: Extract version details
+        id: version
+        run: |
+          mkdir -p "${PWD}/artifacts"
+          git tag --points-at HEAD > /tmp/tags
+          [ -s /tmp/tags ] && PKG_POSTFIX= || PKG_POSTFIX=-devel
+          echo "PKG_POSTFIX=${PKG_POSTFIX}" >> "${PWD}/artifacts/env"
+          echo "PKG_VERSION_NAME=`cat VERSION`" >> "${PWD}/artifacts/env"
+          echo "DPDK_PKG_VERSION=`cat DPDK_VERSION | grep RELEASE_VERSION | awk -F'=' '{print $2}'`" >> "${PWD}/artifacts/env"
+          echo "DPDK_BASE_PKG_VERSION=`cat DPDK_VERSION | grep BASE_VERSION | awk -F'=' '{print $2}' | awk -F'.' '{print $1"."$2}'`" >> "${PWD}/artifacts/env"
+          source "${PWD}/artifacts/env"
+      - uses: uraimo/run-on-arch-action@v2.8.1
+        name: Build libmldpc and generate package
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: ${{ matrix.distro }}
+          githubToken: ${{ github.token }}
+          setup: |
+            mkdir -p ~/.ccache
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
+            --volume "${HOME}/.ccache:/root/.ccache"
+          shell: /bin/bash
+          install: |
+            apt-get update -q -y
+            apt-get install -y build-essential gcc git apt-utils wget lsb-release software-properties-common
+            apt-get install -y cmake meson ninja-build ccache g++ doxygen pkg-config
+            add-apt-repository -y ppa:ubuntu-toolchain-r/test
+            apt-get update -q -y
+            apt-get install -y gcc-13 libssl-dev libjansson4 libjansson-dev
+          run: |
+            source /artifacts/env
+            git config --global --add safe.directory "${PWD}"
+            DISTRO=ubuntu-`lsb_release -rs`
+            echo "DISTRO=${DISTRO}" >> /artifacts/env
+            wget "https://github.com/MarvellEmbeddedProcessors/marvell-dpdk/releases/download/dpdk-cn10k-${DPDK_BASE_PKG_VERSION}_${DPDK_PKG_VERSION}-${DISTRO}-${DPDK_PKG_VERSION}/dpdk-${DPDK_BASE_PKG_VERSION}-cn10k_${DPDK_PKG_VERSION}_arm64.deb"
+            apt-get install -y ./"dpdk-${DPDK_BASE_PKG_VERSION}-cn10k_${DPDK_PKG_VERSION}_arm64.deb"
+            export CC='ccache gcc-13'
+            echo "cache_dir = /root/.ccache" > /root/.ccache/ccache.conf
+            ccache -p
+            pkg-config --list-all
+            BUILD_DIR="${PWD}/build"
+            INSTALL_DIR="${PWD}/install"
+            mkdir -p "${BUILD_DIR}" "${INSTALL_DIR}"
+            meson setup -Denable_docs=true $BUILD_DIR --prefix $INSTALL_DIR -Dwarning_level=3
+            ninja -C build
+            ninja -C build install
+            mkdir -p "${PWD}/install/DEBIAN"
+            mkdir -p "${PWD}/install/usr/include"
+            mkdir -p "${PWD}/install/usr/lib/aarch64-linux-gnu"
+            mkdir -p "${PWD}/install/usr/share/mldpc"
+            mv "${PWD}/install/include/mldpc.h" "${PWD}/install/usr/include/mldpc.h"
+            mv "${PWD}/install/lib/aarch64-linux-gnu/libmldpc.so" "${PWD}/install/usr/lib/aarch64-linux-gnu/libmldpc.so"
+            mv "${PWD}/install/share/mldpc/config.json" "${PWD}/install/usr/share/mldpc/config.json"
+            ln -s "../lib/aarch64-linux-gnu/libmldpc.so" "${PWD}/install/usr/lib/libmldpc.so"
+            cd "${PWD}/install"
+            echo 'Package: libmldpc-cn10k'${PKG_POSTFIX} >> DEBIAN/control
+            echo 'Version: '${PKG_VERSION_NAME} >> DEBIAN/control
+            echo "Maintainer: Jerin Jacob (jerinj@marvell.com)" >> DEBIAN/control
+            echo 'Depends: dpdk-'$DPDK_BASE_PKG_VERSION'-cn10k (= '$DPDK_PKG_VERSION')' >> DEBIAN/control
+            echo "Architecture: arm64" >> DEBIAN/control
+            echo "Description: ML DataPlane Callback Library for Marvell Octeon 10" >> DEBIAN/control
+            cd ..
+            mv "${PWD}/install" "${PWD}/libmldpc-cn10k${PKG_POSTFIX}_${PKG_VERSION_NAME}_arm64"
+            dpkg --build "${PWD}/libmldpc-cn10k${PKG_POSTFIX}_${PKG_VERSION_NAME}_arm64"
+            cp -r "${PWD}/libmldpc-cn10k${PKG_POSTFIX}_${PKG_VERSION_NAME}_arm64.deb" /artifacts/.
+      - name: Export version name
+        id: artifacts
+        run: |
+          source "${PWD}/artifacts/env"
+          echo $PKG_VERSION_NAME
+          echo "PKG_VERSION_NAME=${PKG_VERSION_NAME}" >> "$GITHUB_OUTPUT"
+          echo $DISTRO
+          echo "DISTRO=${DISTRO}" >> "$GITHUB_OUTPUT"
+          [[ "$PKG_POSTFIX" == "-devel" ]] && TAG=devel || TAG=${PKG_VERSION_NAME}
+          [[ "$PKG_POSTFIX" == "-devel" ]] && IS_DEVEL="true" || IS_DEVEL="false"
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "PKG_POSTFIX=${PKG_POSTFIX}" >> "$GITHUB_OUTPUT"
+          echo "IS_DEVEL=${IS_DEVEL}" >> "$GITHUB_OUTPUT"
+      - name: Delete existing MLDPC release
+        if: ${{ github.event_name == 'push' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view libmldpc-cn10k-${{ steps.artifacts.outputs.PKG_VERSION_NAME }}-${{ steps.artifacts.outputs.DISTRO }}-${{ steps.artifacts.outputs.TAG }}; then
+            gh release delete libmldpc-cn10k-${{ steps.artifacts.outputs.PKG_VERSION_NAME }}-${{ steps.artifacts.outputs.DISTRO }}-${{ steps.artifacts.outputs.TAG }} --cleanup-tag -y
+          else
+            echo "Release not found"
+          fi
+      - name: Release MLDPC cn10k package
+        uses: softprops/action-gh-release@v2.0.4
+        if: ${{ github.event_name == 'push' }}
+        with:
+          tag_name: libmldpc-cn10k-${{ steps.artifacts.outputs.PKG_VERSION_NAME }}-${{ steps.artifacts.outputs.DISTRO }}-${{ steps.artifacts.outputs.TAG }}
+          files: |
+            ${{ github.workspace }}/artifacts/libmldpc-cn10k${{ steps.artifacts.outputs.PKG_POSTFIX }}_${{ steps.artifacts.outputs.PKG_VERSION_NAME }}_arm64.deb
+      - name: Dispatch package update event
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.PPA_REPO_SECRET }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/marvellembeddedprocessors/packages/dispatches \
+            -d '{"event_type":"dispatch-event", "client_payload": {"package" : "libmldpc",
+            "tag": "libmldpc-cn10k-${{ steps.artifacts.outputs.PKG_VERSION_NAME }}-${{ steps.artifacts.outputs.DISTRO }}-${{ steps.artifacts.outputs.TAG }}",
+            "distro" : "${{ steps.artifacts.outputs.DISTRO }}",
+            "platform" : "cn10k",
+            "devel" : "${{ steps.artifacts.outputs.IS_DEVEL }}"}}'
