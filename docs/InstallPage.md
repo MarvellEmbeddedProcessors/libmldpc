@@ -43,5 +43,6 @@ export PKG_CONFIG_PATH=${INSTALL_DIR}/lib/pkgconfig
 
 ```
 meson setup -Denable_docs=true build
-ninja -C build doc
+ninja -C build
+ninja -C build install
 ```

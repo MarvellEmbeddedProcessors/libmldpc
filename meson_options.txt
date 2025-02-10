@@ -3,6 +3,12 @@
 
 option('enable_docs',
   type : 'boolean',
-  value : true,
-  description : 'Build documentation.'
+  value : false,
+  description : 'Build API documentation with Doxygen when available',
+)
+
+option('enable_tests',
+  type : 'boolean',
+  value : false,
+  description : 'Build the test application',
 )

@@ -5,6 +5,14 @@ PROJECT_NAME           = "@PROJECT_NAME@"
 
 PROJECT_NUMBER         = @LIBMLDPC_VERSION@
 
+OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
+
+HTML_OUTPUT            = html
+
+GENERATE_HTML          = YES
+
+GENERATE_LATEX         = NO
+
 STRIP_FROM_PATH        = @PROJECT_SOURCE_DIR@
 
 INPUT                  = @PROJECT_SOURCE_DIR@/docs/MainPage.md \

@@ -2,32 +2,36 @@
 # Copyright (c) 2023 Marvell.
 
 project('libmldpc', 'c',
-  version : '1.0')
+  version : '1.0',
+  default_options : ['c_std=c11'],
+)
 
-ext_deps = []
+# _GNU_SOURCE is required to expose POSIX/GNU extensions (e.g. strnlen) that
+# DPDK headers rely on but that are not visible under strict -std=c11.
+add_project_arguments('-D_GNU_SOURCE', language : 'c')
 
-pkgconfig = find_program('pkg-config')
-cflags = run_command(pkgconfig, '--cflags', 'libdpdk', check: true).stdout().split()
-ldflags = run_command(pkgconfig, '--static', '--libs', 'libdpdk', check: true).stdout().split()
+# Dependencies
+# jansson: JSON parsing used in src/mldpc.c to load the EAL config file
+jansson_dep = dependency('jansson', required : true)
 
-jansson_dep = dependency('jansson', method: 'pkg-config', required: true)
-if jansson_dep.found()
-  ext_deps += jansson_dep
-endif
+# libdpdk: DPDK EAL, mempool, memzone, and ML device APIs
+dpdk_dep = dependency('libdpdk', required : true)
 
-includes = include_directories('include', )
+# Shared include directory
+inc_dir = include_directories('include')
 
 subdir('include')
 subdir('src')
-subdir('test')
+
+if get_option('enable_tests')
+  subdir('test')
+endif
 
 if get_option('enable_docs')
-  doxygen = find_program('doxygen', required: false)
+  doxygen = find_program('doxygen', required : false)
   if doxygen.found()
     subdir('docs')
   else
-    message('Documentation disabled without doxygen')
+    warning('enable_docs was set but doxygen was not found; skipping documentation build')
   endif
 endif
-
-install_data('config.json', install_dir: 'share/mldpc', install_mode: 'rw-r--r--')

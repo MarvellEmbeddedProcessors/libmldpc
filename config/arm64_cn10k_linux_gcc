@@ -1,12 +1,27 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Marvell.
+
 [binaries]
-c = ['ccache', 'aarch64-linux-gnu-gcc']
-cpp = ['ccache', 'aarch64-linux-gnu-g++']
-ar = 'aarch64-linux-gnu-gcc-ar'
-strip = 'aarch64-linux-gnu-strip'
-pkgconfig = 'aarch64-linux-gnu-pkg-config'
+c       = 'aarch64-none-linux-gnu-gcc'
+cpp     = 'aarch64-none-linux-gnu-g++'
+ar      = 'aarch64-none-linux-gnu-ar'
+ld      = 'aarch64-none-linux-gnu-ld'
+nm      = 'aarch64-none-linux-gnu-nm'
+objcopy = 'aarch64-none-linux-gnu-objcopy'
+strip   = 'aarch64-none-linux-gnu-strip'
+pkgconfig = 'pkg-config'
 
 [host_machine]
-system = 'linux'
+system     = 'linux'
 cpu_family = 'aarch64'
-cpu = 'armv8.6-a'
-endian = 'little'
+cpu        = 'armv8.6-a'
+endian     = 'little'
+
+[build_machine]
+system     = 'linux'
+cpu_family = 'x86_64'
+cpu        = 'x86_64'
+endian     = 'little'
+
+[properties]
+needs_exe_wrapper = true
