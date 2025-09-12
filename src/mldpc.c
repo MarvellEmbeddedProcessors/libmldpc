@@ -123,7 +123,7 @@ parse_json(int argc, char *argv[], char *config_file)
 	}
 
 	eal_argv = malloc(nb_args * sizeof(char *));
-	for (uint16_t k = 0; k <= nb_args; k++)
+	for (uint16_t k = 0; k < nb_args; k++)
 		eal_argv[k] = eal_args[k];
 
 	return nb_args;
